@@ -1,7 +1,7 @@
 #include <string>
 
-#include <vulkan/vulkan.h>
 #include <shaderc/shaderc.hpp>
+#include <vulkan/vulkan.h>
 
 #ifndef SHADER_H
 
@@ -9,9 +9,6 @@
 
 class Shader {
 public:
-
-static std::vector<char> readFile(const std::string& filename);
-
     static auto getFileContent(const std::string& filePath) -> std::string;
 
     static auto preprocessShader(const std::string& source_name, shaderc_shader_kind kind, const std::string& source) -> std::string;

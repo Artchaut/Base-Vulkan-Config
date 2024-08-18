@@ -12,26 +12,6 @@
 
 #include <SDL2/SDL.h>
 
-// I aim to replace this functions to automate but these doesnt work yet
-std::vector<char> Shader::readFile(const std::string& filename)
-{
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
-    }
-
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-
-    file.close();
-
-    return buffer;
-}
-
 auto Shader::getFileContent(const std::string& filePath) -> std::string
 {
     std::string shaderCode;
