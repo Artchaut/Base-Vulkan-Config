@@ -9,10 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
-find_package(SDL2 REQUIRED)
 find_package(glm REQUIRED)
 
 add_subdirectory(src)
+add_subdirectory(lib/glfw)              #window opening
 add_subdirectory(lib/glm)				#math
 add_subdirectory(lib/shaderc)           #shader compiling
 # add_subdirectory(test) eventually
