@@ -10,8 +10,6 @@
 
 #include <shaderc/shaderc.hpp>
 
-#include <SDL2/SDL.h>
-
 auto Shader::getFileContent(const std::string& filePath) -> std::string
 {
     std::string shaderCode;
