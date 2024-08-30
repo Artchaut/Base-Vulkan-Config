@@ -1,3 +1,4 @@
+#include "glm/fwd.hpp"
 #include <glm/glm.hpp>
 
 #include <vulkan/vulkan.h>
@@ -20,41 +21,25 @@ const float SENSITIVITY = 0.1f;
 
 class Camera {
 private:
-    glm::vec3 position;
+    glm::vec3 cameraPosition;
+    glm::vec3 cameraDirection = glm::vec3(0.0f, -4.0f, -2.0f);
+    glm::vec3 cameraUp = glm::vec3(0.0f, 0.0f, 1.0f);
 
-    glm::vec3 front;
-    glm::vec3 up;
-    glm::vec3 right;
-    glm::vec3 worldUp;
+    int width, height;
 
-    float pitch;
-    float yaw;
-
-    float movementSpeed;
-    float mouseSensitivity;
+    float cameraSpeed = 0.001f;
 
     auto updateCamera() -> void;
 
 public:
-    Camera(glm::vec3 position = glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f), float yaw = YAW, float pitch = PITCH)
-        : front(glm::vec3(0.0f, 0.0f, 0.0f))
-        , movementSpeed(SPEED)
-        , mouseSensitivity(SENSITIVITY)
-    {
-        position = position;
-        worldUp = up;
-        yaw = yaw;
-        pitch = pitch;
-
-        updateCamera();
-    }
+    Camera();
+    explicit Camera(int width, int height, glm::vec3 cameraPosition = glm::vec3(0.0f, 4.0f, 2.0f));
 
     auto getViewMatrix() -> glm::mat4;
 
-    auto processKeyboard(CameraMovement direction, float deltatime) -> void;
+    auto getProjectionMatrix(float FOV) -> glm::mat4;
 
-    auto processMouseMovement(float xoffset, float yoffset, bool constrainPitch = true) -> void;
-
+    auto processKeyboard(CameraMovement direction) -> void;
 };
 
 #endif // !CAMERA_H

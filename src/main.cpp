@@ -25,6 +25,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "imgui_internal.h"
 
 #include "camera.h"
 #include "images.h"
@@ -48,6 +49,17 @@ const std::string MODEL_PATH = "../res/models/viking_room.obj";
 const std::string TEXTURE_PATH = "../res/textures/viking_room.png";
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+struct ImGuiData {
+    std::string s;
+    float f;
+
+    ImGuiData(std::string s, float f)
+        : s(s)
+        , f(f)
+    {
+    }
+};
 
 struct Vertex {
     glm::vec3 pos;
@@ -95,7 +107,8 @@ struct UniformBufferObject {
 };
 
 const std::vector<const char*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"
+    "VK_LAYER_KHRONOS_validation",
+    "VK_LAYER_LUNARG_monitor"
 };
 
 const std::vector<const char*> deviceExtensions = {
@@ -151,12 +164,14 @@ public:
     {
         initWindow();
         initVulkan();
-        // InitImgui();
+        initImgui();
         mainLoop();
         cleanup();
     }
 
 private:
+    ImGuiData* data;
+
     uint32_t currentFrame = 0;
 
     float deltaTime = 0.0f;
@@ -265,6 +280,10 @@ private:
 
         window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Vulkan Boilerplate", nullptr, nullptr);
 
+        if (!glfwVulkanSupported()) {
+            throw std::runtime_error("Vulkan is not supported on your device!");
+        }
+
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
     }
@@ -277,16 +296,21 @@ private:
 
     auto processInput(GLFWwindow* window) -> void
     {
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE))
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE)) {
             glfwSetWindowShouldClose(window, VK_TRUE);
-        if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS)
-            camera.processKeyboard(FORWARD, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            camera.processKeyboard(BACKWARD, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-            camera.processKeyboard(LEFT, deltaTime);
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            camera.processKeyboard(RIGHT, deltaTime);
+        }
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            camera.processKeyboard(FORWARD);
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            camera.processKeyboard(BACKWARD);
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            camera.processKeyboard(LEFT);
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            camera.processKeyboard(RIGHT);
+        }
     }
 
     auto initVulkan() -> void
@@ -322,55 +346,56 @@ private:
     {
         // Setup Dear ImGui context
         IMGUI_CHECKVERSION();
+
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
+        (void)io;
+
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
+        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
         // Setup Dear ImGui style
         ImGui::StyleColorsDark();
 
         // Setup Platform/Renderer backends
         ImGui_ImplGlfw_InitForVulkan(window, true);
+
         ImGui_ImplVulkan_InitInfo init_info = {};
+
         init_info.Instance = instance;
         init_info.PhysicalDevice = physicalDevice;
         init_info.Device = device;
-        init_info.QueueFamily = findQueueFamilies(physicalDevice).presentFamily.value();
-        init_info.Queue = presentQueue;
-        init_info.PipelineCache = VK_NULL_HANDLE;
-        init_info.DescriptorPool = VK_NULL_HANDLE;
-        init_info.Subpass = 0;
+        init_info.QueueFamily = findQueueFamilies(physicalDevice).graphicsFamily.value();
+        init_info.Queue = graphicsQueue;
+        init_info.DescriptorPool = descriptorPool;
+        init_info.RenderPass = renderPass;
+        init_info.ImageCount = MAX_FRAMES_IN_FLIGHT;
         init_info.MinImageCount = 2;
-        init_info.ImageCount = 2;
-        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         init_info.Allocator = nullptr;
         init_info.CheckVkResultFn = check_vk_result;
+
         ImGui_ImplVulkan_Init(&init_info);
+
+        // VkCommandBuffer imguiBuffer = beginSingleTimeCommand(drawCommandPool);
+
+        ImGui_ImplVulkan_CreateFontsTexture();
+        // endSingleTimeCommand(drawCommandPool, imguiBuffer);
+
+        vkDeviceWaitIdle(device);
     }
 
     auto mainLoop() -> void
     {
-        camera = Camera();
-
-        // Our state for demo IMGUI, not used and will be extracted into a bigger class
-        bool show_demo_window = true;
+        camera = Camera(swapChainExtent.width, swapChainExtent.height);
+        data = new ImGuiData("", 45.0f);
 
         while (!glfwWindowShouldClose(window)) {
-            processInput(window);
+            glfwPollEvents();
 
             drawFrame();
-            /*
-            // Start the Dear ImGui frame
-            ImGui_ImplVulkan_NewFrame();
-            ImGui_ImplSDL2_NewFrame();
-            ImGui::NewFrame();
 
-            if (show_demo_window)
-                ImGui::ShowDemoWindow(&show_demo_window);
-            */
-
-            glfwPollEvents();
+            processInput(window);
         }
 
         vkDeviceWaitIdle(device);
@@ -378,6 +403,12 @@ private:
 
     auto cleanup() -> void
     {
+        ImGui_ImplVulkan_Shutdown();
+
+        ImGui_ImplGlfw_Shutdown();
+
+        ImGui::DestroyContext();
+
         cleanupSwapChain(swapChain);
 
         vkDestroySampler(device, textureSampler, nullptr);
@@ -438,6 +469,9 @@ private:
 
         glfwTerminate();
     }
+
+    auto RenderImguiFrame(ImDrawData* drawData) -> void { }
+    auto PresentImguiFrame() -> void { }
 
     auto createInstance() -> void
     {
@@ -963,7 +997,7 @@ private:
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create graphics pipeline!");
+            throw std::runtime_error("Failed to create graphics pipelines!");
         }
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
@@ -1470,14 +1504,15 @@ private:
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
         VkDescriptorPoolCreateInfo poolInfo {};
 
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create descriptor pool!");
@@ -1594,6 +1629,7 @@ private:
     {
         VkCommandBufferBeginInfo beginInfo {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
             throw std::runtime_error("Failed to begin recording command buffer!");
@@ -1646,9 +1682,33 @@ private:
 
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineLayout,
+            0, 1,
+            &descriptorSets[currentFrame],
+            0, nullptr);
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+        //  Imgui
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+
+        ImGui::NewFrame();
+
+        ImGui::Begin("Camera Settings");
+
+        ImGui::SliderFloat("FOV", &data->f, 0.0f, 90.0f);
+
+        ImGui::End();
+
+        ImGui::Render();
+
+        ImDrawData* data = ImGui::GetDrawData();
+
+        ImGui_ImplVulkan_RenderDrawData(data, commandBuffer);
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1697,11 +1757,11 @@ private:
 
         updateUniformBuffer(currentFrame);
 
+        recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-        vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-
-        recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+        //  vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 
         VkSubmitInfo submitInfo {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1740,6 +1800,7 @@ private:
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
             framebufferResized = false;
+            ImGui_ImplVulkan_SetMinImageCount(2);
             recreateSwapChain();
         } else if (result != VK_SUCCESS) {
             throw std::runtime_error("Failed to present swap chain image!");
@@ -1755,13 +1816,10 @@ private:
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
         UniformBufferObject ubo {};
 
         glm::mat4 model = glm::mat4(1.0f);
-        
+
         // In this order x: lr, y: fb, z: ud
         model = glm::translate(model, glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -1769,9 +1827,9 @@ private:
 
         model = glm::rotate(model, time * glm::radians(((int)time % 10 >= 4 ? -1 : 1) * 20.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+        ubo.proj = camera.getProjectionMatrix(glm::radians(data->f));
 
-        ubo.view = glm::lookAt(glm::vec3(0.0f, 4.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)); // camera.getViewMatrix();
+        ubo.view = camera.getViewMatrix();
 
         ubo.model = model;
 
