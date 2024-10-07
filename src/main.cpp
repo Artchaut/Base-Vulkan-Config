@@ -1,3 +1,7 @@
+#include "glm/detail/qualifier.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
+#include "glm/trigonometric.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -8,7 +12,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -45,21 +48,10 @@ const bool enableValidationLayers = true;
 const uint32_t SCREEN_WIDTH = 800;
 const uint32_t SCREEN_HEIGHT = 600;
 
-const std::string MODEL_PATH = "../res/models/viking_room.obj";
+const std::string MODEL_PATH = "../res/models/canard.obj";
 const std::string TEXTURE_PATH = "../res/textures/viking_room.png";
 
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
-struct ImGuiData {
-    std::string s;
-    float f;
-
-    ImGuiData(std::string s, float f)
-        : s(s)
-        , f(f)
-    {
-    }
-};
 
 struct Vertex {
     glm::vec3 pos;
@@ -97,6 +89,130 @@ struct Vertex {
         attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
 
         return attributeDescriptions;
+    }
+};
+
+struct ModelData {
+    std::string modelPath;
+    std::string texturePath;
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    float rotationDeg;
+
+    glm::vec3 scaleFactor;
+    glm::vec3 rotationAxis;
+
+    glm::vec3 position;
+
+    ModelData(std::string mPath,
+        std::string tPath,
+        float rotationDeg,
+        glm::vec3 scaleFactor,
+        glm::vec3 rotationAxis,
+        glm::vec3 position
+
+        )
+        : modelPath(mPath)
+        , texturePath(tPath)
+        , rotationDeg(rotationDeg)
+        , rotationAxis(rotationAxis)
+        , scaleFactor(scaleFactor)
+        , position(position)
+    {
+    }
+
+    ModelData(std::string mPath,
+        std::string tPath)
+        : modelPath(mPath)
+        , texturePath(tPath)
+        , rotationDeg(0.0f)
+        , rotationAxis(glm::vec3(1.0f, 0.0f, 0.0f))
+        , scaleFactor(glm::vec3(1.0f, 1.0f, 1.0f))
+        , position(glm::vec3(0.0f, 0.0f, 0.0f))
+    {
+    }
+
+    ModelData(std::string mPath,
+        std::string tPath,
+        glm::vec3 position)
+        : modelPath(mPath)
+        , texturePath(tPath)
+        , rotationDeg(0.0f)
+        , rotationAxis(glm::vec3(1.0f, 0.0f, 0.0f))
+        , scaleFactor(glm::vec3(1.0f, 1.0f, 1.0f))
+        , position(position)
+    {
+    }
+
+    auto getModelMatrix() -> glm::mat4
+    {
+        glm::mat4 m = glm::mat4(1.0f);
+
+        m = glm::translate(m, position);
+        m = glm::rotate(m, glm::radians(rotationDeg), rotationAxis);
+        m = glm::scale(m, scaleFactor);
+
+        return m;
+    }
+
+    auto loadModel() -> void
+    {
+        tinyobj::attrib_t attrib;
+
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+
+        std::string warn, err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+            throw std::runtime_error(warn + err);
+        }
+
+        for (const auto& shape : shapes) {
+            for (const auto& index : shape.mesh.indices) {
+                Vertex vertex {};
+
+                vertex.pos = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+
+                vertex.color = { 1.0f, 1.0f, 1.0f };
+
+                vertices.push_back(vertex);
+                indices.push_back(indices.size());
+            }
+        }
+    }
+};
+
+struct CameraData {
+    float fov;
+    // More will come
+
+    CameraData(float fov)
+        : fov(fov)
+    {
+    }
+};
+
+struct ImGuiData {
+    std::vector<ModelData> models;
+    CameraData& cameraData;
+
+    // Init with one model;
+    ImGuiData(ModelData model, CameraData& cameraData)
+        : cameraData(cameraData)
+    {
+        models.push_back(model);
     }
 };
 
@@ -388,7 +504,10 @@ private:
     auto mainLoop() -> void
     {
         camera = Camera(swapChainExtent.width, swapChainExtent.height);
-        data = new ImGuiData("", 45.0f);
+        
+
+
+        data = new ImGuiData();
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
@@ -1700,7 +1819,7 @@ private:
 
         ImGui::Begin("Camera Settings");
 
-        ImGui::SliderFloat("FOV", &data->f, 0.0f, 90.0f);
+        ImGui::SliderFloat("FOV", &data->cameraData.fov, 0.0f, 90.0f);
 
         ImGui::End();
 
@@ -1811,27 +1930,21 @@ private:
 
     auto updateUniformBuffer(uint32_t currentImage) -> void
     {
-        static auto startTime = std::chrono::high_resolution_clock::now();
+        /*static auto startTime = std::chrono::high_resolution_clock::now();
 
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+        */
 
         UniformBufferObject ubo {};
 
-        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 model = data->models[0].getModelMatrix();
 
-        // In this order x: lr, y: fb, z: ud
-        model = glm::translate(model, glm::vec3(0.0f, 1.0f, 0.0f));
-
-        model = glm::scale(model, glm::vec3(1.5f, 1.5f, 1.5f));
-
-        model = glm::rotate(model, time * glm::radians(((int)time % 10 >= 4 ? -1 : 1) * 20.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-        ubo.proj = camera.getProjectionMatrix(glm::radians(data->f));
+        ubo.model = model;
 
         ubo.view = camera.getViewMatrix();
 
-        ubo.model = model;
+        ubo.proj = camera.getProjectionMatrix(glm::radians(data->cameraData.fov));
 
         // Invert Y coordinate of clip, as glm is designed for OpenGL
         ubo.proj[1][1] *= -1;
