@@ -1,0 +1,150 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 56e7cb8..b568efd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,19 +10,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ 
+ include(GNUInstallDirs)
+ 
+-find_package(glm REQUIRED)
++set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
++set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
++set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+ 
+ add_subdirectory(src)
+ add_subdirectory(lib/glfw)              #window opening
+-add_subdirectory(lib/glm)				#math
+ add_subdirectory(lib/shaderc)           #shader compiling
+ # add_subdirectory(test) eventually
+ 
+ add_subdirectory(include/imgui)
++add_subdirectory(include/glm)
+ add_subdirectory(include/stb)
+ add_subdirectory(include/tinyobjloader)
+ 
+ target_include_directories(vk_test PUBLIC include/imgui)
+ target_include_directories(vk_test PUBLIC include/stb)
++target_include_directories(vk_test PUBLIC include/glfw)
++target_include_directories(vk_test PUBLIC include/glm)
+ target_include_directories(vk_test PUBLIC include/tinyobjloader)
+ 
++
+diff --git a/include/tinyobjloader/CMakeLists.txt b/include/tinyobjloader/CMakeLists.txt
+index 51f568d..a650015 100644
+--- a/include/tinyobjloader/CMakeLists.txt
++++ b/include/tinyobjloader/CMakeLists.txt
+@@ -1,3 +1,6 @@
+ add_library(tinyobjloader INTERFACE)
++#add_library(tinyobjloader::tinyobjloader ALIAS tinyobjloader)
+ 
+ target_sources(tinyobjloader INTERFACE ${CMAKE_CURRENT_LIST_DIR}/tiny_obj_loader.h)
++
++
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 7720f17..423967f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -2,5 +2,6 @@ file(GLOB_RECURSE SOURCES LIST_DIRECTORIES true *.h *.cpp)
+ 
+ add_executable(vk_test ${SOURCES})
+ 
+-target_link_libraries(vk_test PUBLIC glm glfw vulkan shaderc imgui stb tinyobjloader dl pthread X11 Xxf86vm Xrandr Xi)
++target_link_libraries(vk_test PUBLIC glm tinyobjloader glfw vulkan shaderc imgui stb dl pthread X11 Xxf86vm Xrandr Xi)
++#target_link_libraries(vk_test PRIVATE glm::glm-header-only tinyobjloader::tinyobjloader)
+   
+diff --git a/src/main.cpp b/src/main.cpp
+index 079d906..7538d85 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1,15 +1,9 @@
+-#include "glm/detail/qualifier.hpp"
+-#include "glm/ext/matrix_transform.hpp"
+-#include "glm/fwd.hpp"
+-#include "glm/trigonometric.hpp"
+ #define GLFW_INCLUDE_VULKAN
+ #include <GLFW/glfw3.h>
+ 
+ #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+ #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+-
+-#include <glm/glm.hpp>
+-#include <glm/gtc/matrix_transform.hpp>
++#include <glm/ext/matrix_transform.hpp>
+ 
+ #include <algorithm>
+ #include <cstddef>
+@@ -17,11 +11,12 @@
+ #include <cstring>
+ #include <exception>
+ #include <iostream>
++#include <set>
+ #include <limits>
+ #include <optional>
+-#include <set>
+ #include <stdexcept>
+ #include <vector>
++#include <array>
+ 
+ #include "vulkan/vulkan_core.h"
+ 
+@@ -31,9 +26,9 @@
+ #include "imgui_internal.h"
+ 
+ #include "camera.h"
+-#include "images.h"
+-#include "models.h"
+ #include "shader.h"
++#include "models.h"
++#include "images.h"
+ 
+ #ifndef UINT32_MAX
+ #define UINT32_MAX 0xffffffff
+@@ -153,7 +148,6 @@ struct ModelData {
+         m = glm::translate(m, position);
+         m = glm::rotate(m, glm::radians(rotationDeg), rotationAxis);
+         m = glm::scale(m, scaleFactor);
+-
+         return m;
+     }
+ 
+@@ -207,7 +201,7 @@ struct CameraData {
+ struct ImGuiData {
+     std::vector<ModelData> models;
+     CameraData& cameraData;
+-
++    
+     // Init with one model;
+     ImGuiData(ModelData model, CameraData& cameraData)
+         : cameraData(cameraData)
+@@ -299,7 +293,7 @@ private:
+     bool firstMouse = true;
+ 
+     GLFWwindow* window;
+-
++    
+     Camera camera;
+ 
+     VkInstance instance;
+@@ -505,9 +499,7 @@ private:
+     {
+         camera = Camera(swapChainExtent.width, swapChainExtent.height);
+         
+-
+-
+-        data = new ImGuiData();
++        //data = new ImGuiData();
+ 
+         while (!glfwWindowShouldClose(window)) {
+             glfwPollEvents();
+diff --git a/src/models.h b/src/models.h
+index 73210f1..d3091c0 100644
+--- a/src/models.h
++++ b/src/models.h
+@@ -3,6 +3,7 @@
+ #define MODELS_H
+ 
+ #define TINYOBJLOADER_IMPLEMENTATION
++
+ #include "tiny_obj_loader.h"
+ 
+ #endif // !MODELS_H

@@ -10,19 +10,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
-find_package(glm REQUIRED)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(src)
 add_subdirectory(lib/glfw)              #window opening
-add_subdirectory(lib/glm)				#math
 add_subdirectory(lib/shaderc)           #shader compiling
 # add_subdirectory(test) eventually
 
 add_subdirectory(include/imgui)
+add_subdirectory(include/glm)
 add_subdirectory(include/stb)
 add_subdirectory(include/tinyobjloader)
 
 target_include_directories(vk_test PUBLIC include/imgui)
 target_include_directories(vk_test PUBLIC include/stb)
+target_include_directories(vk_test PUBLIC include/glfw)
+target_include_directories(vk_test PUBLIC include/glm)
 target_include_directories(vk_test PUBLIC include/tinyobjloader)
+
 

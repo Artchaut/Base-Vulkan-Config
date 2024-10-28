@@ -1,15 +1,9 @@
-#include "glm/detail/qualifier.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/fwd.hpp"
-#include "glm/trigonometric.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -17,11 +11,12 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <set>
 #include <limits>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <vector>
+#include <array>
 
 #include "vulkan/vulkan_core.h"
 
@@ -31,9 +26,9 @@
 #include "imgui_internal.h"
 
 #include "camera.h"
-#include "images.h"
-#include "models.h"
 #include "shader.h"
+#include "models.h"
+#include "images.h"
 
 #ifndef UINT32_MAX
 #define UINT32_MAX 0xffffffff
@@ -153,7 +148,6 @@ struct ModelData {
         m = glm::translate(m, position);
         m = glm::rotate(m, glm::radians(rotationDeg), rotationAxis);
         m = glm::scale(m, scaleFactor);
-
         return m;
     }
 
@@ -207,7 +201,7 @@ struct CameraData {
 struct ImGuiData {
     std::vector<ModelData> models;
     CameraData& cameraData;
-
+    
     // Init with one model;
     ImGuiData(ModelData model, CameraData& cameraData)
         : cameraData(cameraData)
@@ -299,7 +293,7 @@ private:
     bool firstMouse = true;
 
     GLFWwindow* window;
-
+    
     Camera camera;
 
     VkInstance instance;
@@ -505,9 +499,7 @@ private:
     {
         camera = Camera(swapChainExtent.width, swapChainExtent.height);
         
-
-
-        data = new ImGuiData();
+        //data = new ImGuiData();
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
